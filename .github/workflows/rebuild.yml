@@ -1,0 +1,60 @@
+name: Rebuild hub
+
+# Rebuilds this site from the pushed code of bible-core and every started
+# book (tools/hub_build.py), and commits only when something changed.
+# Daily, plus a "Run workflow" button on the Actions tab.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-hub
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      # hub_build.py finds the books as siblings of bible-core, by the folder
+      # names in canon/books.json ("Numbers", "Joshua", "Matthew").
+      - uses: actions/checkout@v4
+        with:
+          path: hub
+      - uses: actions/checkout@v4
+        with:
+          repository: lanehaden157/bible-core
+          path: bible-core
+      - uses: actions/checkout@v4
+        with:
+          repository: lanehaden157/numbers
+          path: Numbers
+      - uses: actions/checkout@v4
+        with:
+          repository: lanehaden157/joshua
+          path: Joshua
+      - uses: actions/checkout@v4
+        with:
+          repository: lanehaden157/Matthew
+          path: Matthew
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        working-directory: bible-core
+        run: python tools/hub_build.py ../hub
+      - name: Commit and push if changed
+        working-directory: hub
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Hub already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Rebuild hub from bible-core $(git -C ../bible-core rev-parse --short HEAD)"
+          git push
