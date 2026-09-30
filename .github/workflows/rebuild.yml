@@ -19,8 +19,6 @@ jobs:
   rebuild:
     runs-on: ubuntu-latest
     steps:
-      # hub_build.py finds the books as siblings of bible-core, by the folder
-      # names in canon/books.json ("Numbers", "Joshua", "Matthew").
       - uses: actions/checkout@v4
         with:
           path: hub
@@ -28,21 +26,27 @@ jobs:
         with:
           repository: lanehaden157/bible-core
           path: bible-core
-      - uses: actions/checkout@v4
-        with:
-          repository: lanehaden157/numbers
-          path: Numbers
-      - uses: actions/checkout@v4
-        with:
-          repository: lanehaden157/joshua
-          path: Joshua
-      - uses: actions/checkout@v4
-        with:
-          repository: lanehaden157/Matthew
-          path: Matthew
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Every started book, from bible-core's canon/books.json, so this file
+      # never names a book (tools/new_book.py adds a new book's row). A row
+      # with a `site` and a `repo` is cloned from the GitHub repo its Pages
+      # URL names (https://<owner>.github.io/<repo-slug>/: numbers, joshua,
+      # Matthew) into the folder `repo` names (Numbers, Joshua, Matthew),
+      # beside bible-core, where hub_build.py looks for it.
+      - name: Clone the started books
+        run: |
+          python - <<'EOF'
+          import json, subprocess
+          for b in json.load(open("bible-core/canon/books.json", encoding="utf-8"))["books"]:
+              if not (b.get("site") and b.get("repo")):
+                  continue
+              owner, rest = b["site"].removeprefix("https://").split(".github.io/")
+              url = f"https://github.com/{owner}/{rest.strip('/')}.git"
+              print(f"{b['name']}: {url} -> {b['repo']}/", flush=True)
+              subprocess.run(["git", "clone", "-q", "--depth", "1", url, b["repo"]], check=True)
+          EOF
       - name: Build
         working-directory: bible-core
         run: python tools/hub_build.py ../hub
